@@ -55,3 +55,60 @@ Por cada servidor analizado, el programa genera en la carpeta `outputs` los sigu
 - El análisis se realiza sobre servicios accesibles desde la red donde se ejecuta la herramienta.
 - Si el host no responde, el puerto está cerrado o se presenta timeout, el análisis puede generar resultados incompletos.
 - La herramienta está orientada al análisis defensivo de configuración TLS y no a la explotación de vulnerabilidades.
+
+
+________________________________________
+# Verificador SSL/TLS - MVP Bash
+
+Herramienta de línea de comandos desarrollada en **Bash** para analizar la configuración SSL/TLS de uno o varios servidores web, detectar protocolos heredados, configuraciones inseguras y generar reportes técnicos en consola y en HTML.
+
+## Objetivo
+
+Este proyecto fue diseñado como un MVP para apoyar el análisis defensivo de servicios expuestos a internet, permitiendo:
+
+- Analizar una o varias IPs o dominios
+- Detectar versiones SSL/TLS habilitadas
+- Identificar protocolos heredados o inseguros
+- Detectar configuraciones inseguras o no recomendadas
+- Clasificar hallazgos por severidad
+- Generar recomendaciones de remediación
+- Generar un reporte HTML por objetivo analizado
+
+## Características
+
+- Ingreso de uno o varios objetivos separados por coma
+- Validación básica de IP y dominio
+- Verificación de resolución DNS para dominios
+- Verificación de accesibilidad del puerto 443
+- Ejecución de análisis con:
+  - `testssl.sh`
+  - `nmap`
+- Identificación de protocolos:
+  - SSLv2
+  - SSLv3
+  - TLS 1.0
+  - TLS 1.1
+  - TLS 1.2
+  - TLS 1.3
+- Detección de hallazgos como:
+  - protocolos heredados
+  - NULL ciphers
+  - anonymous ciphers
+  - CBC heredado
+  - certificado autofirmado
+  - SAN ausente
+  - hostname mismatch
+  - clave RSA débil
+  - ausencia de HSTS
+  - posible BREACH
+  - exposición de banner
+- Resumen ejecutivo por objetivo
+- Reporte HTML individual por host
+
+## Estructura esperada del proyecto
+
+```bash
+.
+├── tls_audit.sh
+├── testssl.sh
+└── outputs/
