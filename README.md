@@ -5,6 +5,15 @@ Para ejecutar **SSL/TLS Verifier**, el usuario debe contar con un entorno Linux 
 La ejecución se realiza desde consola mediante el comando correspondiente al script principal. Una vez iniciado, el programa solicita al usuario el ingreso de uno o varios objetivos de análisis.
 
 ---
+### 📦 Dependencias
+
+Para ejecutar **SSL/TLS Verifier**, el usuario debe contar con las siguientes dependencias instaladas en el sistema:
+
+- `bash`
+- `nmap`
+- `testssl.sh`
+
+Además, `testssl.sh` debe encontrarse en el mismo directorio del script principal o estar disponible para su ejecución desde la terminal.
 
 ### 📥 Formato de entrada
 
