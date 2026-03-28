@@ -27,54 +27,7 @@ Si algún valor ingresado no cumple con el formato esperado, este se omite y se 
 
 ---
 
-### 🔍 Proceso de análisis
-
-Por cada objetivo válido, la herramienta realiza automáticamente:
-
-1. escaneo del puerto 443 y enumeración básica con `nmap`
-2. análisis de configuración SSL/TLS con `testssl.sh`
-3. identificación de protocolos habilitados
-4. detección de configuraciones inseguras o no recomendadas
-5. clasificación de hallazgos por severidad
-6. generación de un reporte final en formato HTML
-
----
-
-### 📂 Archivos generados
-
-Por cada servidor analizado, el programa genera en la carpeta `outputs` los siguientes archivos:
-
-- resultado de `nmap`
-- resultado de `testssl.sh`
-- reporte final en formato HTML
-
----
-
-### ⚠️ Consideraciones
-
-- El análisis se realiza sobre servicios accesibles desde la red donde se ejecuta la herramienta.
-- Si el host no responde, el puerto está cerrado o se presenta timeout, el análisis puede generar resultados incompletos.
-- La herramienta está orientada al análisis defensivo de configuración TLS y no a la explotación de vulnerabilidades.
-
-
-________________________________________
-# Verificador SSL/TLS - MVP Bash
-
-Herramienta de línea de comandos desarrollada en **Bash** para analizar la configuración SSL/TLS de uno o varios servidores web, detectar protocolos heredados, configuraciones inseguras y generar reportes técnicos en consola y en HTML.
-
-## Objetivo
-
-Este proyecto fue diseñado como un MVP para apoyar el análisis defensivo de servicios expuestos a internet, permitiendo:
-
-- Analizar una o varias IPs o dominios
-- Detectar versiones SSL/TLS habilitadas
-- Identificar protocolos heredados o inseguros
-- Detectar configuraciones inseguras o no recomendadas
-- Clasificar hallazgos por severidad
-- Generar recomendaciones de remediación
-- Generar un reporte HTML por objetivo analizado
-
-## Características
+### 🔍 Caracteristicas
 
 - Ingreso de uno o varios objetivos separados por coma
 - Validación básica de IP y dominio
@@ -105,7 +58,24 @@ Este proyecto fue diseñado como un MVP para apoyar el análisis defensivo de se
 - Resumen ejecutivo por objetivo
 - Reporte HTML individual por host
 
-## Estructura esperada del proyecto
+---
+
+### 📂 Archivos generados
+
+Por cada servidor analizado, el programa genera en la carpeta `outputs` los siguientes archivos:
+
+- resultado de `nmap`
+- resultado de `testssl.sh`
+- reporte final en formato HTML
+
+---
+
+### ⚠️ Consideraciones
+
+- El análisis se realiza sobre servicios accesibles desde la red donde se ejecuta la herramienta.
+- Si el host no responde, el puerto está cerrado o se presenta timeout, el análisis puede generar resultados incompletos.
+- La herramienta está orientada al análisis defensivo de configuración TLS y no a la explotación de vulnerabilidades.
+
 
 ```bash
 .
