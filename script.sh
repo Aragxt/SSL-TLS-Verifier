@@ -11,7 +11,7 @@ declare -a FINDING_SEVERITY
 declare -a FINDING_TITLE
 declare -a FINDING_EVIDENCE
 declare -a FINDING_RECOMMENDATION
-
+declare -a FINDING_JUSTIFICATION
 
 # Variables globales de resumen
 OVERALL_RISK="SIN DATOS"
@@ -33,6 +33,8 @@ PROTO_TLS12_STATUS=""
 PROTO_TLS12_LINE=""
 PROTO_TLS13_STATUS=""
 PROTO_TLS13_LINE=""
+
+# Evaluación de postura de protocolos
 LEGACY_PROTOCOLS=""
 SECURE_PROTOCOLS=""
 RECOMMENDED_MISSING=""
@@ -97,6 +99,7 @@ reset_findings() {
     FINDING_TITLE=()
     FINDING_EVIDENCE=()
     FINDING_RECOMMENDATION=()
+    FINDING_JUSTIFICATION=()
 
     OVERALL_RISK="SIN DATOS"
     COUNT_CRITICO=0
@@ -117,13 +120,13 @@ reset_findings() {
     PROTO_TLS13_STATUS=""
     PROTO_TLS13_LINE=""
 
-    TARGET_STATUS="PENDIENTE"
-    TARGET_STATUS_DETAIL=""
-    
     LEGACY_PROTOCOLS=""
     SECURE_PROTOCOLS=""
     RECOMMENDED_MISSING=""
     PROTOCOL_POSTURE=""
+
+    TARGET_STATUS="PENDIENTE"
+    TARGET_STATUS_DETAIL=""
 }
 
 get_targets() {
@@ -285,16 +288,49 @@ check_protocol_version() {
     esac
 }
 
+evaluate_protocol_posture() {
+    LEGACY_PROTOCOLS=""
+    SECURE_PROTOCOLS=""
+    RECOMMENDED_MISSING=""
+    PROTOCOL_POSTURE=""
+
+    [[ "$PROTO_SSLV2_STATUS" == "ACTIVADA" ]] && LEGACY_PROTOCOLS+="SSLv2, "
+    [[ "$PROTO_SSLV3_STATUS" == "ACTIVADA" ]] && LEGACY_PROTOCOLS+="SSLv3, "
+    [[ "$PROTO_TLS10_STATUS" == "ACTIVADA" ]] && LEGACY_PROTOCOLS+="TLS 1.0, "
+    [[ "$PROTO_TLS11_STATUS" == "ACTIVADA" ]] && LEGACY_PROTOCOLS+="TLS 1.1, "
+
+    [[ "$PROTO_TLS12_STATUS" == "ACTIVADA" ]] && SECURE_PROTOCOLS+="TLS 1.2, "
+    [[ "$PROTO_TLS13_STATUS" == "ACTIVADA" ]] && SECURE_PROTOCOLS+="TLS 1.3, "
+
+    [[ "$PROTO_TLS13_STATUS" != "ACTIVADA" ]] && RECOMMENDED_MISSING+="TLS 1.3, "
+
+    LEGACY_PROTOCOLS="${LEGACY_PROTOCOLS%, }"
+    SECURE_PROTOCOLS="${SECURE_PROTOCOLS%, }"
+    RECOMMENDED_MISSING="${RECOMMENDED_MISSING%, }"
+
+    if [[ -n "$LEGACY_PROTOCOLS" && -n "$SECURE_PROTOCOLS" ]]; then
+        PROTOCOL_POSTURE="Configuración heredada con soporte moderno parcial"
+    elif [[ -n "$LEGACY_PROTOCOLS" && -z "$SECURE_PROTOCOLS" ]]; then
+        PROTOCOL_POSTURE="Configuración heredada no recomendada"
+    elif [[ -z "$LEGACY_PROTOCOLS" && -n "$SECURE_PROTOCOLS" ]]; then
+        PROTOCOL_POSTURE="Configuración moderna"
+    else
+        PROTOCOL_POSTURE="No fue posible determinar la postura del protocolo"
+    fi
+}
+
 add_finding() {
     local severity="$1"
     local title="$2"
     local evidence="$3"
     local recommendation="$4"
+    local justification="$5"
 
     FINDING_SEVERITY+=("$severity")
     FINDING_TITLE+=("$title")
     FINDING_EVIDENCE+=("$evidence")
     FINDING_RECOMMENDATION+=("$recommendation")
+    FINDING_JUSTIFICATION+=("$justification")
 }
 
 check_insecure_configuration() {
@@ -302,90 +338,138 @@ check_insecure_configuration() {
     local severity="$2"
     local title="$3"
     local recommendation="$4"
+    local justification="$5"
     local line
 
     line=$(grep -E "$pattern" "$TESTSSL_OUT" | head -n 1 | sed 's/^[[:space:]]*//')
 
     if [[ -n "$line" ]]; then
-        add_finding "$severity" "$title" "$line" "$recommendation"
+        add_finding "$severity" "$title" "$line" "$recommendation" "$justification"
     fi
 }
 
 parse_findings() {
-    check_insecure_configuration "^ TLS 1[[:space:]].*offered" \
-    "CRITICO" \
-    "TLS 1.0 habilitado" \
-    "Deshabilitar TLS 1.0 y restringir el servicio a TLS 1.2 o superior."
+    # Protocolos heredados basados en estado real, no regex
+    if [[ "$PROTO_SSLV2_STATUS" == "ACTIVADA" ]]; then
+        add_finding \
+        "CRITICO" \
+        "SSLv2 habilitado" \
+        "$PROTO_SSLV2_LINE" \
+        "Deshabilitar SSLv2 inmediatamente." \
+        "SSLv2 es un protocolo obsoleto e inseguro, sin garantías adecuadas de confidencialidad e integridad."
+    fi
 
-    check_insecure_configuration "^ TLS 1\.1.*offered" \
-    "CRITICO" \
-    "TLS 1.1 habilitado" \
-    "Deshabilitar TLS 1.1 y restringir el servicio a TLS 1.2 o superior."
+    if [[ "$PROTO_SSLV3_STATUS" == "ACTIVADA" ]]; then
+        add_finding \
+        "CRITICO" \
+        "SSLv3 habilitado" \
+        "$PROTO_SSLV3_LINE" \
+        "Deshabilitar SSLv3 inmediatamente." \
+        "SSLv3 es un protocolo legado con debilidades conocidas y no debe mantenerse activo."
+    fi
 
+    if [[ "$PROTO_TLS10_STATUS" == "ACTIVADA" ]]; then
+        add_finding \
+        "ALTO" \
+        "TLS 1.0 habilitado" \
+        "$PROTO_TLS10_LINE" \
+        "Deshabilitar TLS 1.0 o justificar temporalmente su permanencia por compatibilidad heredada, con plan de retiro." \
+        "TLS 1.0 es una versión heredada que incrementa la superficie de exposición y reduce la fortaleza criptográfica del servicio."
+    fi
+
+    if [[ "$PROTO_TLS11_STATUS" == "ACTIVADA" ]]; then
+        add_finding \
+        "ALTO" \
+        "TLS 1.1 habilitado" \
+        "$PROTO_TLS11_LINE" \
+        "Deshabilitar TLS 1.1 o justificar temporalmente su permanencia por compatibilidad heredada, con plan de retiro." \
+        "TLS 1.1 es una versión heredada y su uso prolonga compatibilidades riesgosas innecesarias."
+    fi
+
+    # Cifrados inseguros
     check_insecure_configuration "^ NULL ciphers .*offered" \
     "CRITICO" \
     "NULL ciphers habilitados" \
-    "Deshabilitar suites sin cifrado real."
+    "Deshabilitar suites sin cifrado real." \
+    "Los NULL ciphers permiten conexiones sin cifrado efectivo, comprometiendo directamente la confidencialidad de la comunicación."
 
     check_insecure_configuration "^ Anonymous NULL Ciphers .*offered" \
     "CRITICO" \
     "Cifrados anónimos habilitados" \
-    "Deshabilitar suites anónimas sin autenticación."
+    "Deshabilitar suites anónimas sin autenticación." \
+    "Las suites anónimas eliminan garantías de autenticación del servidor y facilitan escenarios de intermediación o suplantación."
 
     check_insecure_configuration "Obsoleted CBC ciphers.*offered" \
-    "ALTO" \
+    "MEDIO" \
     "Cifrados CBC obsoletos habilitados" \
-    "Priorizar suites AEAD modernas y reducir el uso de CBC heredado."
+    "Priorizar suites AEAD modernas y reducir el uso de CBC heredado." \
+    "El uso de CBC heredado no es ideal frente a alternativas modernas y puede aumentar exposición a debilidades criptográficas conocidas."
 
     check_insecure_configuration "Has server cipher order.*no \(NOT ok\)" \
     "MEDIO" \
     "El servidor no define preferencia de cifrados" \
-    "Configurar el orden de preferencia de cifrados del lado del servidor."
+    "Configurar el orden de preferencia de cifrados del lado del servidor." \
+    "Si el servidor no impone una preferencia, puede terminar negociando opciones menos robustas según el cliente."
 
+    # Certificados
     check_insecure_configuration "subjectAltName \(SAN\).*missing" \
-    "CRITICO" \
+    "MEDIO" \
     "SAN ausente en el certificado" \
-    "Incluir subjectAltName válido en el certificado."
+    "Incluir subjectAltName válido en el certificado." \
+    "La ausencia de SAN dificulta la validación moderna del certificado y puede generar errores de confianza en clientes y navegadores."
 
     check_insecure_configuration "Trust \(hostname\).*does not match supplied URI" \
-    "CRITICO" \
+    "MEDIO" \
     "El certificado no coincide con el host analizado" \
-    "Asegurar coincidencia entre el certificado y el dominio o IP esperada."
+    "Asegurar coincidencia entre el certificado y el dominio o IP esperada." \
+    "La falta de coincidencia entre certificado y host rompe la validación de identidad del servicio y afecta la confianza del canal."
 
     check_insecure_configuration "Chain of trust.*self signed" \
-    "CRITICO" \
+    "ALTO" \
     "Certificado autofirmado" \
-    "Reemplazar por un certificado emitido por una CA confiable."
+    "Reemplazar por un certificado emitido por una CA confiable." \
+    "Un certificado autofirmado no aporta una cadena de confianza reconocida y puede generar alertas o rechazo por parte de clientes."
 
     check_insecure_configuration "Server key size.*RSA[[:space:]]+1024" \
     "ALTO" \
     "Clave RSA débil" \
-    "Migrar a una clave RSA de al menos 2048 bits."
+    "Migrar a una clave RSA de al menos 2048 bits." \
+    "Una clave RSA de 1024 bits ofrece un margen de seguridad inferior al recomendado actualmente para servicios expuestos."
 
     check_insecure_configuration "OCSP URI.*NOT ok" \
     "MEDIO" \
     "No se encontró mecanismo de revocación del certificado" \
-    "Configurar OCSP o CRL para permitir verificación de revocación."
+    "Configurar OCSP o CRL para permitir verificación de revocación." \
+    "Sin mecanismos de revocación, es más difícil validar si un certificado comprometido o inválido debe dejar de ser confiable."
 
+    # Headers / endurecimiento HTTP
     check_insecure_configuration "Strict Transport Security.*not offered" \
     "MEDIO" \
     "HSTS no configurado" \
-    "Habilitar HSTS para forzar el uso de HTTPS."
+    "Habilitar HSTS para forzar el uso de HTTPS." \
+    "La ausencia de HSTS permite que algunos clientes sigan intentando conexiones no endurecidas o degradadas a HTTP."
 
     check_insecure_configuration "BREACH.*potentially NOT ok" \
     "MEDIO" \
     "Posible exposición a BREACH por compresión HTTP" \
-    "Revisar el uso de compresión HTTP en respuestas con información sensible."
+    "Revisar el uso de compresión HTTP en respuestas con información sensible." \
+    "La compresión HTTP en ciertos escenarios puede facilitar ataques de canal lateral cuando se mezclan secretos y contenido reflejado."
 
-    check_insecure_configuration "TLS 1\.3.*not offered" \
-    "BAJO" \
-    "TLS 1.3 no está habilitado" \
-    "Evaluar compatibilidad para habilitar TLS 1.3."
+    # Observaciones adicionales
+    if [[ "$PROTO_TLS13_STATUS" != "ACTIVADA" && "$PROTO_TLS13_STATUS" != "NO ENCONTRADA" ]]; then
+        add_finding \
+        "BAJO" \
+        "TLS 1.3 no está habilitado" \
+        "$PROTO_TLS13_LINE" \
+        "Evaluar compatibilidad para habilitar TLS 1.3." \
+        "No habilitar TLS 1.3 no implica por sí solo una falla crítica, pero limita la adopción de una configuración más moderna."
+    fi
 
     check_insecure_configuration "Server banner.*nginx/" \
     "BAJO" \
     "Banner del servidor expuesto" \
-    "Minimizar la exposición de banners para reducir información visible."
+    "Minimizar la exposición de banners para reducir información visible." \
+    "La exposición de banners facilita recolección de información del servicio y puede ayudar a perfiles de reconocimiento."
 }
 
 count_findings_by_severity() {
@@ -420,37 +504,6 @@ calculate_overall_risk() {
     fi
 }
 
-evaluate_protocol_posture() {
-    LEGACY_PROTOCOLS=""
-    SECURE_PROTOCOLS=""
-    RECOMMENDED_MISSING=""
-    PROTOCOL_POSTURE=""
-
-    [[ "$PROTO_SSLV2_STATUS" == "ACTIVADA" ]] && LEGACY_PROTOCOLS+="SSLv2, "
-    [[ "$PROTO_SSLV3_STATUS" == "ACTIVADA" ]] && LEGACY_PROTOCOLS+="SSLv3, "
-    [[ "$PROTO_TLS10_STATUS" == "ACTIVADA" ]] && LEGACY_PROTOCOLS+="TLS 1.0, "
-    [[ "$PROTO_TLS11_STATUS" == "ACTIVADA" ]] && LEGACY_PROTOCOLS+="TLS 1.1, "
-
-    [[ "$PROTO_TLS12_STATUS" == "ACTIVADA" ]] && SECURE_PROTOCOLS+="TLS 1.2, "
-    [[ "$PROTO_TLS13_STATUS" == "ACTIVADA" ]] && SECURE_PROTOCOLS+="TLS 1.3, "
-
-    [[ "$PROTO_TLS13_STATUS" != "ACTIVADA" ]] && RECOMMENDED_MISSING+="TLS 1.3, "
-
-    LEGACY_PROTOCOLS="${LEGACY_PROTOCOLS%, }"
-    SECURE_PROTOCOLS="${SECURE_PROTOCOLS%, }"
-    RECOMMENDED_MISSING="${RECOMMENDED_MISSING%, }"
-
-    if [[ -n "$LEGACY_PROTOCOLS" && -n "$SECURE_PROTOCOLS" ]]; then
-        PROTOCOL_POSTURE="Configuración heredada con soporte moderno parcial"
-    elif [[ -n "$LEGACY_PROTOCOLS" && -z "$SECURE_PROTOCOLS" ]]; then
-        PROTOCOL_POSTURE="Configuración heredada no recomendada"
-    elif [[ -z "$LEGACY_PROTOCOLS" && -n "$SECURE_PROTOCOLS" ]]; then
-        PROTOCOL_POSTURE="Configuración moderna"
-    else
-        PROTOCOL_POSTURE="No fue posible determinar la postura del protocolo"
-    fi
-}
-
 print_executive_summary() {
     echo
     echo "=============================================="
@@ -465,6 +518,10 @@ print_executive_summary() {
     echo "Medios:   $COUNT_MEDIO"
     echo "Bajos:    $COUNT_BAJO"
     echo "Nivel de exposición general: $OVERALL_RISK"
+    echo "Versiones heredadas detectadas: ${LEGACY_PROTOCOLS:-Ninguna}"
+    echo "Versiones seguras detectadas: ${SECURE_PROTOCOLS:-Ninguna}"
+    echo "Versiones recomendadas ausentes: ${RECOMMENDED_MISSING:-Ninguna}"
+    echo "Postura del protocolo: $PROTOCOL_POSTURE"
     echo
 }
 
@@ -484,6 +541,7 @@ print_findings() {
         echo "    Severidad: ${FINDING_SEVERITY[$i]}"
         echo "    Evidencia: ${FINDING_EVIDENCE[$i]}"
         echo "    Recomendación: ${FINDING_RECOMMENDATION[$i]}"
+        echo "    Justificación: ${FINDING_JUSTIFICATION[$i]}"
         echo
     done
 }
@@ -550,6 +608,10 @@ generate_html_report() {
         echo "      <li>Altos: $COUNT_ALTO</li>"
         echo "      <li>Medios: $COUNT_MEDIO</li>"
         echo "      <li>Bajos: $COUNT_BAJO</li>"
+        echo "      <li>Versiones heredadas detectadas: $(printf '%s' "${LEGACY_PROTOCOLS:-Ninguna}" | html_escape)</li>"
+        echo "      <li>Versiones seguras detectadas: $(printf '%s' "${SECURE_PROTOCOLS:-Ninguna}" | html_escape)</li>"
+        echo "      <li>Versiones recomendadas ausentes: $(printf '%s' "${RECOMMENDED_MISSING:-Ninguna}" | html_escape)</li>"
+        echo "      <li>Postura del protocolo: $(printf '%s' "$PROTOCOL_POSTURE" | html_escape)</li>"
         echo "    </ul>"
         echo "  </div>"
 
@@ -572,7 +634,7 @@ generate_html_report() {
             echo "    <p>No se detectaron hallazgos inseguros con las reglas actuales.</p>"
         else
             echo "    <table>"
-            echo "      <tr><th>#</th><th>Severidad</th><th>Hallazgo</th><th>Evidencia</th><th>Recomendación</th></tr>"
+            echo "      <tr><th>#</th><th>Severidad</th><th>Hallazgo</th><th>Evidencia</th><th>Recomendación</th><th>Justificación</th></tr>"
 
             for i in "${!FINDING_TITLE[@]}"; do
                 sev_class=$(printf '%s' "${FINDING_SEVERITY[$i]}" | tr '[:upper:]' '[:lower:]')
@@ -582,6 +644,7 @@ generate_html_report() {
                 echo "        <td>$(printf '%s' "${FINDING_TITLE[$i]}" | html_escape)</td>"
                 echo "        <td><code>$(printf '%s' "${FINDING_EVIDENCE[$i]}" | html_escape)</code></td>"
                 echo "        <td>$(printf '%s' "${FINDING_RECOMMENDATION[$i]}" | html_escape)</td>"
+                echo "        <td>$(printf '%s' "${FINDING_JUSTIFICATION[$i]}" | html_escape)</td>"
                 echo "      </tr>"
             done
 
@@ -614,7 +677,6 @@ run_analysis_for_target() {
         TARGET_STATUS="DNS_ERROR"
         TARGET_STATUS_DETAIL="El dominio no es resoluble."
         OVERALL_RISK="NO EVALUABLE"
-        echo "[ERROR] $TARGET -> $TARGET_STATUS_DETAIL"
         print_executive_summary
         generate_html_report
         return
@@ -623,7 +685,6 @@ run_analysis_for_target() {
     echo "[*] Verificando accesibilidad del puerto 443..."
     if ! check_port_443 "$TARGET"; then
         OVERALL_RISK="NO EVALUABLE"
-        echo "[ERROR] $TARGET -> $TARGET_STATUS_DETAIL"
         print_executive_summary
         generate_html_report
         return
@@ -635,7 +696,6 @@ run_analysis_for_target() {
         echo "[OK] Resultado de nmap guardado en: $NMAP_OUT"
     else
         OVERALL_RISK="NO EVALUABLE"
-        echo "[ERROR] $TARGET -> $TARGET_STATUS_DETAIL"
         print_executive_summary
         generate_html_report
         return
@@ -644,16 +704,20 @@ run_analysis_for_target() {
     echo "[*] Ejecutando testssl.sh..."
     if run_testssl_with_timeout; then
         echo "[OK] Resultado de testssl.sh guardado en: $TESTSSL_OUT"
+        TARGET_STATUS="OK"
+        TARGET_STATUS_DETAIL="Análisis completado correctamente."
     else
-        OVERALL_RISK="NO EVALUABLE"
-        echo "[ERROR] $TARGET -> $TARGET_STATUS_DETAIL"
-        print_executive_summary
-        generate_html_report
-        return
+        if [[ -s "$TESTSSL_OUT" ]]; then
+            echo "[WARN] testssl.sh no finalizó completamente, pero se encontró salida parcial."
+            TARGET_STATUS="PARTIAL"
+            TARGET_STATUS_DETAIL="Análisis parcial por timeout en testssl.sh."
+        else
+            OVERALL_RISK="NO EVALUABLE"
+            print_executive_summary
+            generate_html_report
+            return
+        fi
     fi
-
-    TARGET_STATUS="OK"
-    TARGET_STATUS_DETAIL="Análisis completado correctamente."
 
     echo
     echo "=============================================="
@@ -674,6 +738,7 @@ run_analysis_for_target() {
     check_protocol_version "TLS 1.3" "^ TLS 1\.3"
     print_separator
 
+    evaluate_protocol_posture
     parse_findings
     calculate_overall_risk
     print_executive_summary
