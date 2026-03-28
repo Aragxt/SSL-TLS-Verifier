@@ -1,52 +1,57 @@
-<h1 align="center">🔐 SSL/TLS Verifier</h1>
-<p align="center">
-  Herramienta CLI desarrollada en Bash para analizar la configuración TLS de uno o varios servidores,
-  identificar hallazgos de seguridad y generar reportes HTML con recomendaciones de remediación.
-</p>
+## 🚀 Instrucciones de uso
+
+Para ejecutar **SSL/TLS Verifier**, el usuario debe contar con un entorno Linux o compatible con **Bash**, así como con las herramientas `nmap` y `testssl.sh` disponibles en el mismo directorio del script o correctamente instaladas en el sistema.
+
+La ejecución se realiza desde consola mediante el comando correspondiente al script principal. Una vez iniciado, el programa solicita al usuario el ingreso de uno o varios objetivos de análisis.
 
 ---
 
-## 📌 Descripción
+### 📥 Formato de entrada
 
-**SSL/TLS Verifier** es una herramienta orientada al análisis defensivo de configuraciones TLS en servidores expuestos a red. Permite evaluar uno o varios dominios o direcciones IP, identificar versiones habilitadas del protocolo, detectar configuraciones inseguras o no recomendadas y presentar un resumen claro del nivel de exposición del servidor analizado.
+La herramienta permite ingresar:
 
-La solución fue desarrollada como un MVP en entorno CLI, utilizando **Bash**, **testssl.sh** y **nmap**, con el objetivo de transformar resultados técnicos en información comprensible y accionable para el usuario.
-
----
-
-## 🎯 Objetivo
-
-Diseñar una aplicación CLI end-to-end que permita analizar uno o varios dominios o direcciones IP, verificando las versiones de TLS habilitadas, la presencia de protocolos obsoletos, configuraciones inseguras o no recomendadas y el estado general del servidor evaluado. La herramienta busca entregar al usuario una visión clara, simplificada y comprensible del nivel de seguridad de la conexión establecida con el servidor.
+- una dirección IP individual, por ejemplo: `8.8.8.8`
+- un dominio individual, por ejemplo: `google.com`
+- varias direcciones IP y/o dominios separadas por comas, por ejemplo: `8.8.8.8, google.com, github.com`
 
 ---
 
-## ⚙️ Características
+### ✅ Validaciones realizadas
 
-- Análisis de uno o varios dominios o direcciones IP
-- Validación básica de entrada
-- Verificación de protocolos SSL/TLS detectados
-- Identificación de configuraciones inseguras o no recomendadas
-- Clasificación de hallazgos por severidad
-- Generación de reporte final en HTML
-- Almacenamiento de evidencia técnica en archivos de salida
-- Resumen ejecutivo por cada objetivo analizado
+Antes de ejecutar el análisis, la herramienta valida que cada entrada corresponda a:
+
+- una dirección IPv4 válida, o
+- un dominio con formato correcto
+
+Si algún valor ingresado no cumple con el formato esperado, este se omite y se notifica al usuario mediante un mensaje de advertencia.
 
 ---
 
-## 🛠️ Tecnologías utilizadas
+### 🔍 Proceso de análisis
 
-- **Bash**
-- **testssl.sh**
-- **nmap**
-- **HTML**
+Por cada objetivo válido, la herramienta realiza automáticamente:
+
+1. escaneo del puerto 443 y enumeración básica con `nmap`
+2. análisis de configuración SSL/TLS con `testssl.sh`
+3. identificación de protocolos habilitados
+4. detección de configuraciones inseguras o no recomendadas
+5. clasificación de hallazgos por severidad
+6. generación de un reporte final en formato HTML
 
 ---
 
-## 📂 Estructura del proyecto
+### 📂 Archivos generados
 
-```bash
-.
-├── main.sh
-├── testssl.sh
-├── outputs/
-└── README.md
+Por cada servidor analizado, el programa genera en la carpeta `outputs` los siguientes archivos:
+
+- resultado de `nmap`
+- resultado de `testssl.sh`
+- reporte final en formato HTML
+
+---
+
+### ⚠️ Consideraciones
+
+- El análisis se realiza sobre servicios accesibles desde la red donde se ejecuta la herramienta.
+- Si el host no responde, el puerto está cerrado o se presenta timeout, el análisis puede generar resultados incompletos.
+- La herramienta está orientada al análisis defensivo de configuración TLS y no a la explotación de vulnerabilidades.
